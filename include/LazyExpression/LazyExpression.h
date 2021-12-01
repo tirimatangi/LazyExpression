@@ -926,12 +926,35 @@ public:
     }
 };
 
+
+// Returns true_type if binary operation OP can be performed on types T1 and T2.
+#define OperOk(NAME, OP)                                                \
+template <class T1, class T2, class = void>                             \
+struct NAME : std::false_type                                           \
+{                                                                       \
+    using Type = void;                                                  \
+};                                                                      \
+                                                                        \
+template <class T1, class T2>                                           \
+struct NAME<T1, T2, std::void_t<decltype(std::declval<T1>() OP std::declval<T2>())>> : std::true_type   \
+{                                                                       \
+    using Type = decltype(std::declval<T1>() OP std::declval<T2>());    \
+}
+
+OperOk(PlusOk, +);
+OperOk(MinusOk, -);
+OperOk(TimesOk, *);
+OperOk(DivideOk, /);
+
+#undef OperOk
+
 // Convenience expressions for {X+Y,  X-Y,  X*Y, X/Y} for 5 type combinations of X and Y.
 // 1. Both X and Y are expressions of the same dimension (i.e. they have equally many nesting levels)
 // 2. X is an expression and Y is a container of the same dimension.
 // 3. X is an expression and Y is a number.
 // 4. X is a container and Y is an expression of the same dimension.
 // 5. X is a number and Y an expression.
+
 template <class F1, class F2, class... Args1, class... Args2>
 auto operator+(const Expression<F1, Args1...>& e1, const Expression<F2, Args2...>& e2)  // Combination 1
 {
@@ -949,35 +972,36 @@ auto operator+(const Expression<F1, Args1...>& e1, const Expression<F2, Args2...
 template <class F1, class... Args1, class T>
 auto operator+(const Expression<F1, Args1...>& e1, const T& t) // Combinations 2 and 3
 {
-    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-        auto f = [coeff=t](const ResultType<F1>& x){ return x + coeff; };
+    using ExprValueType = typename Dimension<decltype(e1)>::ValueType;
+    using ValueType = typename Dimension<T>::ValueType;
+    static_assert(PlusOk<ExprValueType, ValueType>{}(), "Operator+ not defined between the expression value type and operand value type.");
+
+    if constexpr (Dimension<T>{}() == 0) { // T is not a container
+        auto f = [coeff=t](const ExprValueType& x){ return x + coeff; };
         return Expression{f, e1};
-    } else { // T should be a container compatible with the expression.
-        static_assert(Dimension<T>{}() == Dimension<Expression<F1, Args1...>>{}(),
-                      "Dimensions of the expression and the container do not match");
-        using ValueType = typename Dimension<T>::ValueType;
-        auto f = [](const ValueType& x){ return x; };
-        auto e2 = Expression{f, t};
-        return e1 + e2;
+    }
+    else {  // T is a container
+        auto f = [](const ExprValueType& x, const ValueType& y){ return x + y; };
+        return Expression{f, e1, t};
     }
 }
 
 template <class T, class F2, class... Args2>
 auto operator+(const T& t, const Expression<F2, Args2...>& e2) // Combinations 4 and 5
 {
-    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-        auto f = [coeff=t](const ResultType<F2>& x){ return coeff + x; };
+    using ValueType = typename Dimension<T>::ValueType;
+    using ExprValueType = typename Dimension<decltype(e2)>::ValueType;
+    static_assert(PlusOk<ValueType, ExprValueType>{}(), "Operator+ not defined between the operand value type and expression value type.");
+
+    if constexpr (Dimension<T>{}() == 0) { // T is not a container
+        auto f = [coeff=t](const ExprValueType& x){ return coeff + x; };
         return Expression{f, e2};
-    } else { // T should be a container compatible with the expression.
-        static_assert(Dimension<T>{}() == Dimension<Expression<F2, Args2...>>{}(),
-                      "Dimensions of the expression and the container do not match");
-        using ValueType = typename Dimension<T>::ValueType;
-        auto f = [](const ValueType& x){ return x; };
-        auto e1 = Expression{f, t};
-        return e1 + e2;
+    }
+    else {  // T is a container
+        auto f = [](const ValueType& x, const ExprValueType& y){ return x + y; };
+        return Expression{f, t, e2};
     }
 }
-
 
 template <class F1, class F2, class... Args1, class... Args2>
 auto operator-(const Expression<F1, Args1...>& e1, const Expression<F2, Args2...>& e2)  // Combination 1
@@ -996,35 +1020,36 @@ auto operator-(const Expression<F1, Args1...>& e1, const Expression<F2, Args2...
 template <class F1, class... Args1, class T>
 auto operator-(const Expression<F1, Args1...>& e1, const T& t) // Combinations 2 and 3
 {
-    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-        auto f = [coeff=t](const ResultType<F1>& x){ return x - coeff; };
+    using ExprValueType = typename Dimension<decltype(e1)>::ValueType;
+    using ValueType = typename Dimension<T>::ValueType;
+    static_assert(MinusOk<ExprValueType, ValueType>{}(), "Operator- not defined between the expression value type and operand value type");
+
+    if constexpr (Dimension<T>{}() == 0) { // T is not a container
+        auto f = [coeff=t](const ExprValueType& x){ return x - coeff; };
         return Expression{f, e1};
-    } else { // T should be a container compatible with the expression.
-        static_assert(Dimension<T>{}() == Dimension<Expression<F1, Args1...>>{}(),
-                      "Dimensions of the expression and the container do not match");
-        using ValueType = typename Dimension<T>::ValueType;
-        auto f = [](const ValueType& x){ return x; };
-        auto e2 = Expression{f, t};
-        return e1 - e2;
+    }
+    else {  // T is a container
+        auto f = [](const ExprValueType& x, const ValueType& y){ return x - y; };
+        return Expression{f, e1, t};
     }
 }
 
 template <class T, class F2, class... Args2>
 auto operator-(const T& t, const Expression<F2, Args2...>& e2) // Combinations 4 and 5
 {
-    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-        auto f = [coeff=t](const ResultType<F2>& x){ return coeff - x; };
+    using ValueType = typename Dimension<T>::ValueType;
+    using ExprValueType = typename Dimension<decltype(e2)>::ValueType;
+    static_assert(MinusOk<ValueType, ExprValueType>{}(), "Operator- not defined between the operand value type and expression value type.");
+
+    if constexpr (Dimension<T>{}() == 0) { // T is not a container
+        auto f = [coeff=t](const ExprValueType& x){ return coeff - x; };
         return Expression{f, e2};
-    } else { // T should be a container compatible with the expression.
-        static_assert(Dimension<T>{}() == Dimension<Expression<F2, Args2...>>{}(),
-                      "Dimensions of the expression and the container do not match");
-        using ValueType = typename Dimension<T>::ValueType;
-        auto f = [](const ValueType& x){ return x; };
-        auto e1 = Expression{f, t};
-        return e1 - e2;
+    }
+    else {  // T is a container
+        auto f = [](const ValueType& x, const ExprValueType& y){ return x - y; };
+        return Expression{f, t, e2};
     }
 }
-
 
 template <class F1, class F2, class... Args1, class... Args2>
 auto operator*(const Expression<F1, Args1...>& e1, const Expression<F2, Args2...>& e2)  // Combination 1
@@ -1043,35 +1068,36 @@ auto operator*(const Expression<F1, Args1...>& e1, const Expression<F2, Args2...
 template <class F1, class... Args1, class T>
 auto operator*(const Expression<F1, Args1...>& e1, const T& t) // Combinations 2 and 3
 {
-    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-        auto f = [coeff=t](const ResultType<F1>& x){ return x * coeff; };
+    using ExprValueType = typename Dimension<decltype(e1)>::ValueType;
+    using ValueType = typename Dimension<T>::ValueType;
+    static_assert(TimesOk<ExprValueType, ValueType>{}(), "Operator* not defined between the expression value type and operand value type.");
+
+    if constexpr (Dimension<T>{}() == 0) { // T is not a container
+        auto f = [coeff=t](const ExprValueType& x){ return x * coeff; };
         return Expression{f, e1};
-    } else { // T should be a container compatible with the expression.
-        static_assert(Dimension<T>{}() == Dimension<Expression<F1, Args1...>>{}(),
-                      "Dimensions of the expression and the container do not match");
-        using ValueType = typename Dimension<T>::ValueType;  // Valuetype of container T
-        auto f = [](const ValueType& x){ return x; };
-        auto e2 = Expression{f, t};
-        return e1 * e2;
+    }
+    else {  // T is a container
+        auto f = [](const ExprValueType& x, const ValueType& y){ return x * y; };
+        return Expression{f, e1, t};
     }
 }
 
 template <class T, class F2, class... Args2>
 auto operator*(const T& t, const Expression<F2, Args2...>& e2) // Combinations 4 and 5
 {
-    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-        auto f = [coeff=t](const ResultType<F2>& x){ return coeff * x; };
+    using ValueType = typename Dimension<T>::ValueType;
+    using ExprValueType = typename Dimension<decltype(e2)>::ValueType;
+    static_assert(PlusOk<ValueType, ExprValueType>{}(), "Operator* not defined between the operand value type and expression value type.");
+
+    if constexpr (Dimension<T>{}() == 0) { // T is not a container
+        auto f = [coeff=t](const ExprValueType& x){ return coeff * x; };
         return Expression{f, e2};
-    } else { // T should be a container compatible with the expression.
-        static_assert(Dimension<T>{}() == Dimension<Expression<F2, Args2...>>{}(),
-                      "Dimensions of the expression and the container do not match");
-        using ValueType = typename Dimension<T>::ValueType;
-        auto f = [](const ValueType& x){ return x; };
-        auto e1 = Expression{f, t};
-        return e1 * e2;
+    }
+    else {  // T is a container
+        auto f = [](const ValueType& x, const ExprValueType& y){ return x * y; };
+        return Expression{f, t, e2};
     }
 }
-
 
 template <class F1, class F2, class... Args1, class... Args2>
 auto operator/(const Expression<F1, Args1...>& e1, const Expression<F2, Args2...>& e2)  // Combination 1
@@ -1090,30 +1116,34 @@ auto operator/(const Expression<F1, Args1...>& e1, const Expression<F2, Args2...
 template <class F1, class... Args1, class T>
 auto operator/(const Expression<F1, Args1...>& e1, const T& t) // Combinations 2 and 3
 {
-    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-        auto f = [coeff=t](const ResultType<F1>& x){ return x / coeff; };
+    using ExprValueType = typename Dimension<decltype(e1)>::ValueType;
+    using ValueType = typename Dimension<T>::ValueType;
+    static_assert(PlusOk<ExprValueType, ValueType>{}(), "Operator/ not defined between the expression value type and operand value type.");
+
+    if constexpr (Dimension<T>{}() == 0) { // T is not a container
+        auto f = [coeff=t](const ExprValueType& x){ return x / coeff; };
         return Expression{f, e1};
-    } else { // T should be a container compatible with the expression.
-        static_assert(Dimension<T>{}() == Dimension<Expression<F1, Args1...>>{}(), "Dimensions of the expression and the container do not match");
-        using ValueType = typename Dimension<T>::ValueType;
-        auto f = [](const ValueType& x){ return x; };
-        auto e2 = Expression{f, t};
-        return e1 / e2;
+    }
+    else {  // T is a container
+        auto f = [](const ExprValueType& x, const ValueType& y){ return x / y; };
+        return Expression{f, e1, t};
     }
 }
 
 template <class T, class F2, class... Args2>
 auto operator/(const T& t, const Expression<F2, Args2...>& e2) // Combinations 4 and 5
 {
-    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
-        auto f = [coeff=t](const ResultType<F2>& x){ return coeff / x; };
+    using ValueType = typename Dimension<T>::ValueType;
+    using ExprValueType = typename Dimension<decltype(e2)>::ValueType;
+    static_assert(PlusOk<ValueType, ExprValueType>{}(), "Operator/ not defined between the operand value type and expression value type.");
+
+    if constexpr (Dimension<T>{}() == 0) { // T is not a container
+        auto f = [coeff=t](const ExprValueType& x){ return coeff / x; };
         return Expression{f, e2};
-    } else { // T should be a container compatible with the expression.
-        static_assert(Dimension<T>{}() == Dimension<Expression<F2, Args2...>>{}(), "Dimensions of the expression and the container do not match");
-        using ValueType = typename Dimension<T>::ValueType;
-        auto f = [](const ValueType& x){ return x; };
-        auto e1 = Expression{f, t};
-        return e1 / e2;
+    }
+    else {  // T is a container
+        auto f = [](const ValueType& x, const ExprValueType& y){ return x / y; };
+        return Expression{f, t, e2};
     }
 }
 

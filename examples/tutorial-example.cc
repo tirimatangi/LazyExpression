@@ -15,6 +15,7 @@
 #include <iterator>
 #include <cmath>
 #include <numeric>
+#include <complex>
 
 #include <LazyExpression/LazyExpression.h>
 
@@ -35,6 +36,8 @@ std::ostream& operator<<(std::ostream& os, const Container<T>& vec);
 template<typename T, auto N, template <class, size_t> class Container>
 std::ostream& operator<<(std::ostream& os, const Container<T, N>& vec);
 std::ostream& operator<<(std::ostream& os, std::string str);
+template<typename T>
+std::ostream& operator<<(std::ostream& os, std::complex<T> c);
 
 // Print a vector- or list-like container.
 template<typename T, template <class...> class Container>
@@ -62,12 +65,21 @@ std::ostream& operator<<(std::ostream& os, const Container<T, N>& vec)
     return os;
 }
 
-// Print string.
+// Print a string.
 std::ostream& operator<<(std::ostream& os, std::string str)
 {
     os << "\'" << str.c_str() << "\'";
     return os;
 }
+
+// Print a complex number.
+template<typename T>
+std::ostream& operator<<(std::ostream& os, std::complex<T> c)
+{
+    os << c.real() << ((c.imag() >= 0) ? '+' : '-') << std::abs(c.imag()) << 'i';
+    return os;
+}
+
 
 int main()
 {
@@ -224,7 +236,84 @@ int main()
         cout << "Ref capture 2: " << exprR2() << "\n";
     }
 
-    std::cout << "\n*** Example 6 *** : Weird corner cases. \n";
+    std::cout << "\n*** Example 6 *** : Complex matrices. \n";
+    {
+        // Define matrix data type
+        using std::complex;
+        typedef vector<std::complex<double>> CplxVector;
+        typedef vector<CplxVector> CplxMatrix;
+
+        // Function calculates inner product of two square complex matrices: C = conj(A) * B
+        auto complexInnerProduct = [](const CplxMatrix& a, const CplxMatrix& b) {
+            assert(a.size() == b.size());
+            CplxMatrix c(a.size());
+            if (c.empty())
+                return c;
+            const int rows = a.size(), cols = (*a.begin()).size();
+            assert(rows == cols); // Deal with square matrices only
+            std::fill(c.begin(), c.end(), CplxVector(cols));
+
+            for (size_t i = 0; i < rows; ++i)
+                for (size_t j = 0; j <= i; ++j) {
+                    std::complex<double> tmp {0.0, 0.0};
+                    for (size_t k = 0; k < cols; ++k) {
+                        tmp += (std::conj(a[k][i]) * b[k][j]);
+                    }
+                    c[i][j] = tmp;
+                    c[j][i] = std::conj(tmp);
+                }
+            return c;
+        };
+
+        // Define a vector of 3 matrices
+        vector<CplxMatrix> vecMatX(3), vecMatY(3);
+
+        // The size of the matrices
+        const size_t matSize = 4;
+
+        // Initialize matSize-by-matSize matrices.
+        for (size_t i = 0; i < vecMatX.size(); ++i) {
+            vecMatX[i] = vecMatY[i] = CplxMatrix(matSize);
+            std::fill(vecMatX[i].begin(), vecMatX[i].end(), CplxVector(matSize));
+            std::fill(vecMatY[i].begin(), vecMatY[i].end(), CplxVector(matSize));
+
+            for (size_t y = 0; y < matSize; ++y)
+                for (size_t x = 0; x < matSize; ++x) {
+                    vecMatX[i][y][x] = {(std::rand() % 20)-100., (std::rand() % 20)-10.};
+                    vecMatY[i][y][x] = {(std::rand() % 20)-10., (std::rand() % 20)-10.};
+            }
+        }
+
+        // Calculate the first matrix inner product for reference.
+        auto firstInnerProduct = complexInnerProduct(vecMatX[0], vecMatY[0]);
+
+        // Expression for matrix inner products
+        auto exprInner = Expression{complexInnerProduct, vecMatX, vecMatY};
+
+        // Evaluate the first inner product matrix
+        auto firstExprInnerProduct = exprInner[0];
+
+        cout << "exprInner[0] = \n";
+        for (size_t i = 0; i < matSize; ++i) {
+            cout << "  ";
+            for (size_t j = 0; j < matSize; ++j)
+                cout << firstInnerProduct[i][j] << " \t\t";
+            cout << "\n";
+        }
+        cout << "First element of the first product  exprInner[0][0][0] = " << exprInner[0][0][0]
+             << ", direct calculation gives " << firstInnerProduct[0][0] << "\n";
+
+        // Add a complex constant to an expression.
+        auto exprPlusConst = exprInner + complex<double>{1.0, 1.0};
+        cout << "Add constant 1+i: " << exprPlusConst[0][0][0] << "\n";
+
+        // Beware that by default, the multiplication is elementwise. Not to be confused with matrix multiplication
+        auto exprTimesMatrix = vecMatX * exprInner;
+        cout << "Elementwise multiply: " << vecMatX[0][0][0] << " * " << exprInner[0][0][0] << " = "
+             << exprTimesMatrix[0][0][0] << "\n";
+    }
+
+    std::cout << "\n*** Example 7 *** : Weird corner cases. \n";
     {
         // If is possible to define an expression where the "containers" are mere numbers or other objects.
         // This example maps numbers into a string.
