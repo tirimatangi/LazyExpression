@@ -14,7 +14,7 @@ As you'll see later, the containers may also be other (possibly nested) expressi
 Let's denote the value type of the innermost container of **C**<sub>_k_</sub> by **T**<sub>_k_</sub> for _k_=1..._n_.
 So in our example **T**<sub>1</sub> would be `float` and **T**<sub>2</sub> would be `int`.
 
-Now assume that you have a function (or any callable object)  _f_(**T**<sub>1</sub>, ... , **T**<sub>_n_</sub>)&rarr;**S**
+Now assume that you have a function (or any callable object)  **f**(**T**<sub>1</sub>, ... , **T**<sub>_n_</sub>)&rarr;**S**
 which maps the arguments into a value of type **S**. Such a function in our example could be
 `double f(int, float)` (i.e. **S** = double).
 
