@@ -15,6 +15,7 @@
 #include <iterator>
 #include <cmath>
 #include <numeric>
+#include <complex>
 
 /*
  This file tests several weird and wonderful corner cases of LazyExpression library.
@@ -71,9 +72,14 @@ std::ostream& operator<<(std::ostream& os, std::string str);
 
 using namespace LazyExpression;
 
+// Container printers.
+template<typename T, template <class...> class Container>
+std::ostream& operator<<(std::ostream& os, const Container<T>& vec);
 template<typename T, auto N, template <class, size_t> class Container>
 std::ostream& operator<<(std::ostream& os, const Container<T, N>& vec);
-
+std::ostream& operator<<(std::ostream& os, std::string str);
+template<typename T>
+std::ostream& operator<<(std::ostream& os, std::complex<T> c);
 
 template<typename T, template <class...> class Container>
 std::ostream& operator<<(std::ostream& os, const Container<T>& vec)
@@ -105,6 +111,13 @@ std::ostream& operator<<(std::ostream& os, std::string str)
     return os;
 }
 
+// Print a complex number.
+template<typename T>
+std::ostream& operator<<(std::ostream& os, std::complex<T> c)
+{
+    os << c.real() << ((c.imag() >= 0) ? '+' : '-') << std::abs(c.imag()) << 'i';
+    return os;
+}
 
 double fglobal1(int i) noexcept
 {
@@ -914,6 +927,7 @@ void test_b()
     auto expr_e_plus_c = vecPtList + expr;  // Add an expression to a container
     auto expr_e_times_e = expr * expr;      // Multiply two expressions
     auto expr_e_minus_number = -expr - 42;  // Subtract a constant from an expression.
+    auto expr_e_999 = expr + 999;  // Subtract a constant from an expression.
 
     // Make a complicated expression out of several simpler ones.
     auto expr_arithmetic = (expr_e_plus_c + expr_e_times_e) / (3.14 * expr_e_minus_number);
@@ -921,6 +935,7 @@ void test_b()
     eLocal =  ((vecPtList[1][1][1] + eLocal) + (eLocal * eLocal)) / (3.14 * (-eLocal - 42));
     cout << "eLocal = " << eLocal << " ?==? " << expr_arithmetic[1][1][1] << "\n";
     cout << "expr_arithmetic() = " << expr_arithmetic() << "\n";
+    cout << "999: " << expr[1][1][1] << ", " << expr_e_999[1][1][1] << "\n";
 }
 
 
@@ -970,6 +985,109 @@ void test_c()
     cout << "e = " << e() << ", e00 = " << e00 << "\n";
 }
 
+void test_d()
+{
+    // Define matrix data type
+    using std::complex;
+    typedef vector<std::complex<double>> CplxVector;
+    typedef vector<CplxVector> CplxMatrix;
+
+    // Function calculates inner product of two square complex matrices: C = conj(A) * B
+    auto complexInnerProduct = [](const CplxMatrix& a, const CplxMatrix& b) {
+        assert(a.size() == b.size());
+        CplxMatrix c(a.size());
+        if (c.empty())
+            return c;
+        const int rows = a.size(), cols = (*a.begin()).size();
+        assert(rows == cols); // Deal with square matrices only
+        std::fill(c.begin(), c.end(), CplxVector(cols));
+
+        for (size_t i = 0; i < rows; ++i)
+            for (size_t j = 0; j <= i; ++j) {
+                std::complex<double> tmp {0.0, 0.0};
+                for (size_t k = 0; k < cols; ++k) {
+                    tmp += (std::conj(a[k][i]) * b[k][j]);
+                }
+                c[i][j] = tmp;
+                c[j][i] = std::conj(tmp);
+            }
+        return c;
+    };
+
+    vector<CplxMatrix> vecMatX(3), vecMatY(3);
+
+    // The size of the matrices
+    const size_t matSize = 4;
+
+    // Initialize matSize-by-matSize matrices.
+    for (size_t i = 0; i < vecMatX.size(); ++i) {
+        vecMatX[i] = vecMatY[i] = CplxMatrix(matSize);
+        std::fill(vecMatX[i].begin(), vecMatX[i].end(), CplxVector(matSize));
+        std::fill(vecMatY[i].begin(), vecMatY[i].end(), CplxVector(matSize));
+
+        for (size_t y = 0; y < matSize; ++y)
+            for (size_t x = 0; x < matSize; ++x) {
+                vecMatX[i][y][x] = {(std::rand() % 200)-100., (std::rand() % 200)-100.};
+                vecMatY[i][y][x] = {(std::rand() % 200)-100., (std::rand() % 200)-100.};
+        }
+    }
+
+    // Calculate the first matrix product for reference.
+    auto firstProduct = complexInnerProduct(vecMatX[0], vecMatY[0]);
+
+    // Expression for matrix inner products
+    auto exprInner = Expression{complexInnerProduct, vecMatX, vecMatY};
+
+    cout << "exprInner() = " << exprInner() << "\n";
+    cout << "First element of the first product  exprInner[0][0][0] = " << exprInner[0][0][0]
+            << ", direct calculation gives " << firstProduct[0][0] << "\n";
+    {
+        auto exprConstA = exprInner + complex<double>{1.0, 1.0};
+        auto exprConstB = complex<double>{1.0, 1.0} + exprInner;
+        cout << "Add constant 1+i: " << exprConstA[0][0][0] <<", " << exprConstB[0][0][0]<< "\n";
+        auto exprContainerA = exprInner + vecMatX;
+        auto exprContainerB = vecMatY + exprInner;
+        auto vecMat = exprContainerA();
+        cout << "Add container: " << vecMat[0][0][0] << ", err = " << std::abs(vecMat[0][0][0] - (exprInner[0][0][0] + vecMatX[0][0][0])) << ",  ";
+        exprContainerB(&vecMat);
+        cout << vecMat[0][0][0] << ", err = " << std::abs(vecMat[0][0][0] - (vecMatY[0][0][0] + exprInner[0][0][0])) << "\n";
+    }
+    {
+        auto exprConstA = exprInner - complex<double>{1.0, 1.0};
+        auto exprConstB = complex<double>{1.0, 1.0} - exprInner;
+        cout << "Sub constant 1-i: " << exprConstA[0][0][0] <<", " << exprConstB[0][0][0]<< "\n";
+        auto exprContainerA = exprInner - vecMatX;
+        auto exprContainerB = vecMatY - exprInner;
+        auto vecMat = exprContainerA();
+        cout << "Sub container: " << vecMat[0][0][0] << ", err = " << std::abs(vecMat[0][0][0] - (exprInner[0][0][0] - vecMatX[0][0][0])) << ",  ";
+        exprContainerB(&vecMat);
+        cout << vecMat[0][0][0] << ", err = " << std::abs(vecMat[0][0][0] - (vecMatY[0][0][0] - exprInner[0][0][0])) << "\n";
+    }
+    {
+        auto exprConstA = exprInner * complex<double>{1.0, 1.0};
+        auto exprConstB = complex<double>{1.0, 1.0} * exprInner;
+        cout << "Mul constant 1+i: " << exprConstA[0][0][0] <<", " << exprConstB[0][0][0]<< "\n";
+        auto exprContainerA = exprInner * vecMatX;
+        auto exprContainerB = vecMatY * exprInner;
+        auto vecMat = exprContainerA();
+        cout << "Mul container: " << vecMat[0][0][0] << ", err = " << std::abs(vecMat[0][0][0] - (exprInner[0][0][0] * vecMatX[0][0][0])) << ",  ";
+        exprContainerB(&vecMat);
+        cout << vecMat[0][0][0] << ", err = " << std::abs(vecMat[0][0][0] - (vecMatY[0][0][0] * exprInner[0][0][0])) << "\n";
+    }
+    {
+        auto exprConstA = exprInner / complex<double>{1.0, 1.0};
+        auto exprConstB = complex<double>{1.0, 1.0} / exprInner;
+        cout << "Div constant 1+i: " << exprConstA[0][0][0] <<", " << exprConstB[0][0][0]<< "\n";
+        auto exprContainerA = exprInner / vecMatX;
+        auto exprContainerB = vecMatY / exprInner;
+        auto vecMat = exprContainerA();
+        cout << "Div container: " << vecMat[0][0][0] << ", err = " << std::abs(vecMat[0][0][0] - (exprInner[0][0][0] / vecMatX[0][0][0])) << ",  ";
+        exprContainerB(&vecMat);
+        cout << vecMat[0][0][0] << ", err = " << std::abs(vecMat[0][0][0] - (vecMatY[0][0][0] / exprInner[0][0][0])) << "\n";
+    }
+}
+
+
 int main()
 {
     cout << "##### doing test_a() #####\n";
@@ -978,5 +1096,7 @@ int main()
     test_b();
     cout << "##### doing test_c() #####\n";
     test_c();
+    cout << "##### doing test_d() #####\n";
+    test_d();
     cout << "##### DONE #####\n";
 }
