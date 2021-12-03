@@ -14,7 +14,7 @@ As you'll see later, the containers may also be other (possibly nested) expressi
 Let's denote the value type of the innermost container of **C**<sub>_k_</sub> by **T**<sub>_k_</sub> for _k_=1..._n_.
 So in our example **T**<sub>1</sub> would be `float` and **T**<sub>2</sub> would be `int`.
 
-Now assume that you have a function (or any callable object)  _f_(**T**<sub>1</sub>, ... , **T**<sub>_n_</sub>)&rarr;**S**
+Now assume that you have a function (or any callable object)  **f**(**T**<sub>1</sub>, ... , **T**<sub>_n_</sub>)&rarr;**S**
 which maps the arguments into a value of type **S**. Such a function in our example could be
 `double f(int, float)` (i.e. **S** = double).
 
@@ -176,6 +176,28 @@ Finally, evaluate the most derived expression.
 ```
 
 In example 3 of [tutorial-example.cc](https://github.com/tirimatangi/LazyExpression/blob/main/examples/tutorial-example.cc) we also verify that the values are the same as the values given by direct calculation.
+
+A container can be easily converted into an expression with convenience function `asExpression`.
+This enables lazily evaluated arithmetics with any container type as long as their dimensions are compatible.
+Here is an example:
+```c++
+    vector<float> c1 = {1.1, 1.2, 1.3, 2.1, 2.2, 2.3};
+    auto expr1 = asExpression(c1); // Example of capture by copy.
+
+    deque<int> c2 = { 1, 2, 3, -1, -2, -3 };
+    auto expr2 = asExpression(ref(c2)); // Example of capture by reference.
+
+    auto expr3 = asExpression(vector<int>{100, 200, 300, -400, -500, -600}); // Example of capture by copy.
+
+    // Now that the containers are expressions, you can do lazily evaluated arithmetics.
+    auto expr123 = expr3 + expr1 * expr2;
+
+    cout  << expr3() << " + " << expr1() << " * " << expr2() << " = " << expr123() << "\n";
+// Output:
+// { 100 200 300 -400 -500 -600 } + { 1.1 1.2 1.3 2.1 2.2 2.3 } * { 1 2 3 -1 -2 -3 } = { 101.1 202.4 303.9 -402.1 -504.4 -606.9 }
+```
+
+For runnable code, see example 7 in  [tutorial-example.cc](https://github.com/tirimatangi/LazyExpression/blob/main/examples/tutorial-example.cc).
 
 ## Evaluate the entire expression into a container
 

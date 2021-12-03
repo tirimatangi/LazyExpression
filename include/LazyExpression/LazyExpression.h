@@ -1164,6 +1164,19 @@ auto makeRefExpression(const F& f, const Args&... args)
   return Expression(std::cref(f), std::cref(args)...);
 }
 
+// Turns the given container into an expression.
+template <class C>
+auto asExpression(C&& c)
+{
+    using ValueType = typename Dimension<UnwrapRef<std::decay_t<C>>>::ValueType; // Value type of the innermost container.
+
+    // C is a movable container or reference_wrapper of a container?
+    if constexpr (std::is_rvalue_reference_v<decltype(std::forward<C>(c))>)
+        return Expression{[](const ValueType& x){return x;}, std::forward<C>(c)};
+    else // Copy if not rvalue to avoid dangling references.
+        return Expression{[](const ValueType& x){return x;}, C(c)};
+}
+
 } // namespace LazyExpression
 
 #endif // LAZYEXPRESSION_H

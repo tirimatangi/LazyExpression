@@ -29,6 +29,7 @@ using std::ref;
 // The API to LazyExpression library is class Expression and function makeRefExpression.
 using LazyExpression::Expression;
 using LazyExpression::makeRefExpression;
+using LazyExpression::asExpression;
 
 // Container printers.
 template<typename T, template <class...> class Container>
@@ -313,7 +314,25 @@ int main()
              << exprTimesMatrix[0][0][0] << "\n";
     }
 
-    std::cout << "\n*** Example 7 *** : Weird corner cases. \n";
+    std::cout << "\n*** Example 7 *** : Container algebra with identity expressions. \n";
+    {
+        // Any container can be turned into an expression
+
+        vector<float> c1 = {1.1, 1.2, 1.3, 2.1, 2.2, 2.3};
+        auto expr1 = asExpression(c1); // Note: capture by copy
+
+        deque<int> c2 = { 1, 2, 3, -1, -2, -3 };
+        auto expr2 = asExpression(ref(c2)); // Note: capture by reference
+
+        auto expr3 = asExpression(vector<int>{100, 200, 300, -400, -500, -600}); // Note: copy elision + move
+
+        // Now that the containers are expressions, you can do lazily evaluated arithmetics.
+        auto expr123 = expr3 + expr1 * expr2;
+
+        cout  << expr3() << " + " << expr1() << " * " << expr2() << " = " << expr123() << "\n";
+    }
+
+    std::cout << "\n*** Example 8 *** : Weird corner cases. \n";
     {
         // If is possible to define an expression where the "containers" are mere numbers or other objects.
         // This example maps numbers into a string.
