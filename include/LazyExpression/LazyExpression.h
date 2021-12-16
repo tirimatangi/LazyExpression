@@ -806,6 +806,11 @@ public:
             return std::get<0>(_args).size();
     }
 
+    bool empty() const noexcept
+    {
+        return size() == 0;
+    }
+
     // Returns true if argument pack Args... has at least one argument which itself is an expression.
     static constexpr bool hasExpressionArguments()
     {
