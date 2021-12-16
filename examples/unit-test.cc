@@ -689,6 +689,14 @@ void test_a()
     // auto expr4 = Expression{[i=10](int k) { return i * k ; }};
     // auto expr5 = Expression();
   }
+  {
+    vector<int> e {1,2,3};
+    auto expr = Expression{[](int i){ return i+1; }, ref(e)};
+    auto exprexpr = 1.5 * expr + expr;
+    cout << "e=" << e << ", exprexpr="<<exprexpr() << "empty=" << exprexpr.empty() << "\n";
+    e.clear();
+    cout << "e=" << e << ", exprexpr="<<exprexpr() << "empty=" << exprexpr.empty() << "\n";
+  }
 } // test_a
 
 
